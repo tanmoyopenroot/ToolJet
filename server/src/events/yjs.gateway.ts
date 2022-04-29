@@ -3,7 +3,31 @@ import { WebSocketGateway, WebSocketServer, OnGatewayConnection, OnGatewayDiscon
 import { Server } from 'ws';
 import { AuthService } from 'src/services/auth.service';
 import { isEmpty } from 'lodash';
-import { setupWSConnection } from 'y-websocket/bin/utils';
+import { setupWSConnection, setPersistence } from 'y-websocket/bin/utils';
+import { RedisPubSub } from '../helpers/redis';
+
+const redisPersistence = new RedisPubSub({
+  redisOpts: {
+    host: process.env.REDIS_HOST || 'localhost',
+    port: process.env.REDIS_PORT || 6379,
+    username: process.env.REDIS_USER || '',
+    password: process.env.REDIS_PASSWORD || '',
+  },
+});
+
+setPersistence({
+  provider: redisPersistence,
+  bindState: async (docName: any, ydoc: any) => {
+    const persistedYdoc = redisPersistence.bindState(docName, ydoc);
+    ydoc.on('update', persistedYdoc.updateHandler);
+  },
+  writeState: (docName: any, ydoc: any) => {
+    // This is called when all connections to the document are closed.
+    return new Promise((resolve) => {
+      resolve(redisPersistence.closeDoc(docName));
+    });
+  },
+});
 
 @WebSocketGateway({ path: '/yjs' })
 export class YjsGateway implements OnGatewayConnection, OnGatewayDisconnect {
@@ -28,7 +52,8 @@ export class YjsGateway implements OnGatewayConnection, OnGatewayDisconnect {
       if (isEmpty(signedJwt)) connection.close(ERROR_CODE_WEBSOCKET_AUTH_FAILED);
       else {
         try {
-          setupWSConnection(connection, request);
+          const appId = this.getCookie(request?.headers?.cookie, 'app_id');
+          setupWSConnection(connection, request, { docName: appId });
         } catch (error) {
           console.log(error);
         }
