@@ -1,6 +1,6 @@
 import * as Y from 'yjs';
 import Redis from 'ioredis';
-import * as awarenessProtocol from 'y-protocols/awareness'
+import * as awarenessProtocol from 'y-protocols/awareness';
 
 export class RedisInstance {
   rps: RedisPubSub;
@@ -15,7 +15,7 @@ export class RedisInstance {
   constructor(rps: RedisPubSub, name: string, doc: Y.Doc) {
     this.rps = rps;
     this.name = name;
-    this.awarenessChannel = `${name}-awareness`
+    this.awarenessChannel = `${name}-awareness`;
     this.doc = doc;
     if (doc.store.clients.size > 0) {
       this.updateHandler(Y.encodeStateAsUpdate(doc));
@@ -64,7 +64,7 @@ export class RedisPubSub {
     this.subscriber.on('message', (channel: string, message: any) => {
       if (channel.includes('-awareness')) {
         const pdoc = this.docs.get(channel.replace('-awareness', ''));
-        awarenessProtocol.applyAwarenessUpdate(pdoc.doc.awareness, Buffer.from(message), this.subscriber);
+        awarenessProtocol.applyAwarenessUpdate(pdoc.doc.awareness, message, this.subscriber);
       } else {
         const pdoc = this.docs.get(channel);
         if (pdoc) {
