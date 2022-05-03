@@ -7,7 +7,7 @@ import { setupWSConnection, setPersistence } from 'y-websocket/bin/utils';
 import { RedisPubSub } from '../helpers/redis';
 
 const redis = new RedisPubSub({
-  redisOpts: {
+  redisOpts: process.env.REDIS_URL ? process.env.REDIS_URL : {
     host: process.env.REDIS_HOST || 'localhost',
     port: process.env.REDIS_PORT || 6379,
     username: process.env.REDIS_USER || '',
@@ -20,6 +20,7 @@ setPersistence({
   bindState: async (docName: any, ydoc: any) => {
     const persistedYdoc = redis.bindState(docName, ydoc);
     ydoc.on('update', persistedYdoc.updateHandler);
+    ydoc.awareness.on('update', persistedYdoc.updateAwarenessHandler);
   },
   writeState: (docName: any, ydoc: any) => {
     return new Promise((resolve) => {
@@ -30,7 +31,7 @@ setPersistence({
 
 @WebSocketGateway({ path: '/yjs' })
 export class YjsGateway implements OnGatewayConnection, OnGatewayDisconnect {
-  constructor(private authService: AuthService) {}
+  constructor(private authService: AuthService) { }
   @WebSocketServer()
   server: Server;
 
@@ -52,6 +53,7 @@ export class YjsGateway implements OnGatewayConnection, OnGatewayDisconnect {
       else {
         try {
           const appId = this.getCookie(request?.headers?.cookie, 'app_id');
+          console.log(`User connected with app-id: ${appId}`);
           setupWSConnection(connection, request, { docName: appId });
         } catch (error) {
           console.log(error);
@@ -68,5 +70,5 @@ export class YjsGateway implements OnGatewayConnection, OnGatewayDisconnect {
     this.onConnection(client, args);
   }
 
-  handleDisconnect(client: any): void {}
+  handleDisconnect(client: any): void { }
 }

@@ -1,9 +1,11 @@
 import * as Y from 'yjs';
 import Redis from 'ioredis';
+import * as awarenessProtocol from 'y-protocols/awareness'
 
 export class RedisInstance {
   rps: RedisPubSub;
   name: string;
+  awarenessChannel: string;
   doc: Y.Doc;
   /**
    * @param {RedisPubSub} rps
@@ -13,22 +15,27 @@ export class RedisInstance {
   constructor(rps: RedisPubSub, name: string, doc: Y.Doc) {
     this.rps = rps;
     this.name = name;
+    this.awarenessChannel = `${name}-awareness`
     this.doc = doc;
     if (doc.store.clients.size > 0) {
       this.updateHandler(Y.encodeStateAsUpdate(doc));
     }
     doc.on('update', this.updateHandler);
-    rps.subscriber.subscribe(name);
+    rps.subscriber.subscribe(name, this.awarenessChannel);
   }
 
   updateHandler = (update: Uint8Array) => {
     this.rps.publisher.publish(this.name, update);
   };
 
+  updateAwarenessHandler = (update: any) => {
+    this.rps.publisher.publish(this.awarenessChannel, update);
+  };
+
   destroy() {
     this.doc.off('update', this.updateHandler);
     this.rps.docs.delete(this.name);
-    return this.rps.subscriber.unsubscribe(this.name);
+    return this.rps.subscriber.unsubscribe(this.name, this.awarenessChannel);
   }
 }
 
@@ -41,8 +48,8 @@ const createRedisInstance = (redisOpts: any, redisClusterOpts: any): Redis.Redis
   redisClusterOpts ? new Redis.Cluster(redisClusterOpts) : redisOpts ? new Redis(redisOpts) : new Redis();
 
 export class RedisPubSub {
-  publisher: any;
-  subscriber: any;
+  publisher: Redis.Redis | Redis.Cluster;
+  subscriber: Redis.Redis | Redis.Cluster;
   docs: Map<any, any>;
   /**
    * @param {Object} [opts]
@@ -54,14 +61,19 @@ export class RedisPubSub {
     this.subscriber = createRedisInstance(redisOpts, redisClusterOpts);
     this.docs = new Map();
 
-    this.subscriber.on('message', (channel: any, message: { split: (arg0: string) => Iterable<number> }) => {
-      const pdoc = this.docs.get(channel);
-      if (pdoc) {
-        pdoc.doc.transact(() => {
-          Y.applyUpdate(pdoc.doc, new Uint8Array(message.split(',')));
-        });
+    this.subscriber.on('message', (channel: string, message: any) => {
+      if (channel.includes('-awareness')) {
+        const pdoc = this.docs.get(channel.replace('-awareness', ''));
+        awarenessProtocol.applyAwarenessUpdate(pdoc.doc.awareness, Buffer.from(message), this.subscriber);
       } else {
-        this.subscriber.unsubscribe(channel);
+        const pdoc = this.docs.get(channel);
+        if (pdoc) {
+          pdoc.doc.transact(() => {
+            Y.applyUpdate(pdoc.doc, new Uint8Array(message.split(',')));
+          });
+        } else {
+          this.subscriber.unsubscribe(channel, `${channel}-awareness`);
+        }
       }
     });
   }
