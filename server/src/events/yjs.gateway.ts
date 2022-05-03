@@ -6,7 +6,7 @@ import { isEmpty } from 'lodash';
 import { setupWSConnection, setPersistence } from 'y-websocket/bin/utils';
 import { RedisPubSub } from '../helpers/redis';
 
-const redisPersistence = new RedisPubSub({
+const redis = new RedisPubSub({
   redisOpts: {
     host: process.env.REDIS_HOST || 'localhost',
     port: process.env.REDIS_PORT || 6379,
@@ -16,15 +16,14 @@ const redisPersistence = new RedisPubSub({
 });
 
 setPersistence({
-  provider: redisPersistence,
+  provider: redis,
   bindState: async (docName: any, ydoc: any) => {
-    const persistedYdoc = redisPersistence.bindState(docName, ydoc);
+    const persistedYdoc = redis.bindState(docName, ydoc);
     ydoc.on('update', persistedYdoc.updateHandler);
   },
   writeState: (docName: any, ydoc: any) => {
-    // This is called when all connections to the document are closed.
     return new Promise((resolve) => {
-      resolve(redisPersistence.closeDoc(docName));
+      resolve(redis.closeDoc(docName));
     });
   },
 });

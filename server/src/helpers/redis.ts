@@ -2,9 +2,9 @@ import * as Y from 'yjs';
 import Redis from 'ioredis';
 
 export class RedisInstance {
-  rps: any;
-  name: any;
-  doc: any;
+  rps: RedisPubSub;
+  name: string;
+  doc: Y.Doc;
   /**
    * @param {RedisPubSub} rps
    * @param {string} name
@@ -37,7 +37,7 @@ export class RedisInstance {
  * @param {Array<Object>|null} redisClusterOpts
  * @return {Redis.Redis | Redis.Cluster}
  */
-const createRedisInstance = (redisOpts: any, redisClusterOpts: any) =>
+const createRedisInstance = (redisOpts: any, redisClusterOpts: any): Redis.Redis | Redis.Cluster =>
   redisClusterOpts ? new Redis.Cluster(redisClusterOpts) : redisOpts ? new Redis(redisOpts) : new Redis();
 
 export class RedisPubSub {
